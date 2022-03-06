@@ -1,0 +1,20 @@
+package models
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type EscortTracking struct {
+	Id        string    `json:"id"`
+	EscortId  string    `json:"escortId"`
+	Location  string    `json:"location"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (e *EscortTracking) SetDefaultValues() *EscortTracking {
+	e.Id = uuid.NewString()
+	return e
+}
