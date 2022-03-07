@@ -4,6 +4,7 @@ import (
 	"context"
 	"escort-book-tracking/db"
 	"escort-book-tracking/models"
+	"fmt"
 	"time"
 )
 
@@ -12,14 +13,16 @@ type EscortTrackingRepository struct {
 }
 
 func (r *EscortTrackingRepository) GetOne(ctx context.Context, id string) (models.EscortTracking, error) {
-	query := "SELECT * FROM escorttracking WHERE id = $1;"
+	query := `SELECT id, escort_id, st_asgeojson(location), created_at, updated_at
+		      FROM escort_tracking WHERE escort_id = $1;`
 	row := r.Data.DB.QueryRowContext(ctx, query, id)
 
 	var tracking models.EscortTracking
+	var stringPoint string
 	err := row.Scan(
 		&tracking.Id,
 		&tracking.EscortId,
-		&tracking.Location,
+		&stringPoint,
 		&tracking.CreatedAt,
 		&tracking.UpdatedAt)
 
@@ -27,44 +30,79 @@ func (r *EscortTrackingRepository) GetOne(ctx context.Context, id string) (model
 		return models.EscortTracking{}, err
 	}
 
+	tracking.Location.ParseGeoJson(stringPoint)
+
 	return tracking, nil
 }
 
-func (r *EscortTrackingRepository) GetByTerritory(ctx context.Context, territory string) ([]models.EscortTracking, error) {
-	query := `SELECT a.* from customer_tracking as a
-			  join territory as b
-		      on st_intersects(a.location, b.location)
-		      where b.name = $1`
+func (r *EscortTrackingRepository) GetByTerritory(ctx context.Context, territory string, offset, limit int) ([]models.EscortTracking, error) {
+	query := `SELECT a.id, a.escort_id, st_asgeojson(a.location), a.created_at, a.updated_at
+			  FROM escort_tracking AS a
+			  JOIN territory AS b
+		      ON st_intersects(a.location, b.location)
+		      WHERE b.name = $1 OFFSET($2) LIMIT($3);`
 
-	rows, _ := r.Data.DB.QueryContext(ctx, query, territory)
+	rows, _ := r.Data.DB.QueryContext(ctx, query, territory, offset, limit)
 	var trackings []models.EscortTracking
 
 	for rows.Next() {
 		var tracking models.EscortTracking
+		var stringPoint string
 
-		rows.Scan(&tracking.Id, &tracking.EscortId, &tracking.Location, &tracking.CreatedAt, &tracking.UpdatedAt)
+		rows.Scan(&tracking.Id, &tracking.EscortId, &stringPoint, &tracking.CreatedAt, &tracking.UpdatedAt)
+		tracking.Location.ParseGeoJson(stringPoint)
 		trackings = append(trackings, tracking)
 	}
 
 	return trackings, nil
 }
 
-func (r *EscortTrackingRepository) Create(ctx context.Context, tracking *models.EscortTracking) error {
-	query := "INSERT INTO escorttracking VALUES ($1, $2, $3, $4, $5);"
+func (r *EscortTrackingRepository) UpsertOne(ctx context.Context, tracking *models.EscortTracking) error {
+	query := "SELECT id FROM escort_tracking WHERE escort_id = $1;"
+	row := r.Data.DB.QueryRowContext(ctx, query, tracking.EscortId)
+
+	var id string
+	err := row.Scan(&id)
+
+	if err == nil {
+		tracking.Id = id
+		update := fmt.Sprintf(
+			"UPDATE escort_tracking SET location = 'POINT(%f %f)', updated_at = $1 WHERE id = $2;",
+			tracking.Location.Latitude,
+			tracking.Location.Longitude,
+		)
+		r.Data.DB.ExecContext(ctx, update, time.Now().UTC(), id)
+
+		return nil
+	}
+
+	point := fmt.Sprintf(`POINT(%f %f)`, tracking.Location.Latitude, tracking.Location.Longitude)
+	insert := "INSERT INTO escort_tracking VALUES ($1, $2, $3, $4, $5);"
 	tracking.SetDefaultValues()
 
-	_, err := r.Data.DB.ExecContext(
+	r.Data.DB.ExecContext(
 		ctx,
-		query,
+		insert,
 		tracking.Id,
 		tracking.EscortId,
-		tracking.Location,
+		point,
 		time.Now().UTC(),
 		time.Now().UTC())
 
-	if err != nil {
-		return err
-	}
-
 	return nil
+}
+
+func (r *EscortTrackingRepository) Count(ctx context.Context) (int, error) {
+	query := `SELECT COUNT(a.*) from escort_tracking AS a
+			  JOIN territory AS b
+		      ON st_intersects(a.location, b.location)
+			  WHERE b.name = $1;`
+
+	row := r.Data.DB.QueryRowContext(ctx, query)
+
+	var number int
+
+	row.Scan(&number)
+
+	return number, nil
 }
