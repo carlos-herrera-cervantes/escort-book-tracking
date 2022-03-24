@@ -7,5 +7,5 @@ import (
 
 type ICustomerTrackingRepository interface {
 	GetOne(ctx context.Context, id string) (models.CustomerTracking, error)
-	Create(ctx context.Context, tracking *models.CustomerTracking) error
+	UpsertOne(ctx context.Context, tracking *models.CustomerTracking) error
 }

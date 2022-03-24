@@ -13,7 +13,8 @@ func main() {
 	e := echo.New()
 	v1 := e.Group("/api/v1")
 
-	routes.BoostrapTrackingRoutes(v1)
+	routes.BoostrapCustomerTrackingRoutes(v1)
+	routes.BoostrapEscortTrackingRoutes(v1)
 
 	e.Logger.Fatal(e.Start(fmt.Sprintf(":%v", os.Getenv("PORT"))))
 }
