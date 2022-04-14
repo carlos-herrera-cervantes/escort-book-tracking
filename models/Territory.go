@@ -15,7 +15,4 @@ type Territory struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-func (t *Territory) SetDefaultValues() *Territory {
-	t.Id = uuid.NewString()
-	return t
-}
+func (t *Territory) SetDefaultValues() { t.Id = uuid.NewString() }

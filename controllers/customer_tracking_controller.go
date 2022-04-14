@@ -13,8 +13,7 @@ type CustomerTrackingController struct {
 }
 
 func (h *CustomerTrackingController) GetCustomerLocation(c echo.Context) error {
-	customerId := ""
-	tracking, err := h.Repository.GetOne(c.Request().Context(), customerId)
+	tracking, err := h.Repository.GetCustomerTracking(c.Request().Context(), c.Request().Header.Get("user-id"))
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -25,14 +24,13 @@ func (h *CustomerTrackingController) GetCustomerLocation(c echo.Context) error {
 
 func (h *CustomerTrackingController) SetCustomerLocation(c echo.Context) (err error) {
 	var customerTracking models.CustomerTracking
-	customerId := ""
-	customerTracking.CustomerId = customerId
+	customerTracking.CustomerId = c.Request().Header.Get("user-id")
 
 	if err = c.Bind(&customerTracking.Location); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	if err = h.Repository.UpsertOne(c.Request().Context(), &customerTracking); err != nil {
+	if err = h.Repository.UpsertCustomerTracking(c.Request().Context(), &customerTracking); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

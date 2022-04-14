@@ -8,13 +8,22 @@ import (
 	"time"
 )
 
+type IEscortTrackingRepository interface {
+	GetEscortTracking(ctx context.Context, id string) (*models.EscortTracking, error)
+	GetEscortLocationByTerritory(ctx context.Context, territory string, offset, limit int) ([]models.EscortTracking, error)
+	UpsertEscortTracking(ctx context.Context, tracking *models.EscortTracking) error
+	CountEscortLocationByTerritory(ctx context.Context) (int, error)
+}
+
 type EscortTrackingRepository struct {
 	Data *db.Data
 }
 
-func (r *EscortTrackingRepository) GetOne(ctx context.Context, id string) (models.EscortTracking, error) {
-	query := `SELECT id, escort_id, st_asgeojson(location), created_at, updated_at
-		      FROM escort_tracking WHERE escort_id = $1;`
+func (r *EscortTrackingRepository) GetEscortTracking(ctx context.Context, id string) (*models.EscortTracking, error) {
+	query := `SELECT a.id, a.escort_id, st_asgeojson(a.location), a.created_at, a.updated_at, b.name
+		      FROM escort_tracking AS a
+			  JOIN escort_tracking_status AS b
+			  WHERE escort_id = $1;`
 	row := r.Data.DB.QueryRowContext(ctx, query, id)
 
 	var tracking models.EscortTracking
@@ -24,23 +33,27 @@ func (r *EscortTrackingRepository) GetOne(ctx context.Context, id string) (model
 		&tracking.EscortId,
 		&stringPoint,
 		&tracking.CreatedAt,
-		&tracking.UpdatedAt)
+		&tracking.UpdatedAt,
+		&tracking.EscortTrackingStatus,
+	)
 
 	if err != nil {
-		return models.EscortTracking{}, err
+		return &models.EscortTracking{}, err
 	}
 
 	tracking.Location.ParseGeoJson(stringPoint)
 
-	return tracking, nil
+	return &tracking, nil
 }
 
-func (r *EscortTrackingRepository) GetByTerritory(ctx context.Context, territory string, offset, limit int) ([]models.EscortTracking, error) {
-	query := `SELECT a.id, a.escort_id, st_asgeojson(a.location), a.created_at, a.updated_at
+func (r *EscortTrackingRepository) GetEscortLocationByTerritory(ctx context.Context, territory string, offset, limit int) ([]models.EscortTracking, error) {
+	query := `SELECT a.id, a.escort_id, st_asgeojson(a.location), a.created_at, a.updated_at, c.name
 			  FROM escort_tracking AS a
 			  JOIN territory AS b
 		      ON st_intersects(a.location, b.location)
-		      WHERE b.name = $1 OFFSET($2) LIMIT($3);`
+			  JOIN escort_tracking_status AS c
+			  ON a.escort_tracking_status_id = c.id
+		      WHERE b.name = $1 AND c.name IN('Free', 'Busy') OFFSET($2) LIMIT($3);`
 
 	rows, _ := r.Data.DB.QueryContext(ctx, query, territory, offset, limit)
 	var trackings []models.EscortTracking
@@ -49,7 +62,7 @@ func (r *EscortTrackingRepository) GetByTerritory(ctx context.Context, territory
 		var tracking models.EscortTracking
 		var stringPoint string
 
-		rows.Scan(&tracking.Id, &tracking.EscortId, &stringPoint, &tracking.CreatedAt, &tracking.UpdatedAt)
+		rows.Scan(&tracking.Id, &tracking.EscortId, &stringPoint, &tracking.CreatedAt, &tracking.UpdatedAt, &tracking.EscortTrackingStatus)
 		tracking.Location.ParseGeoJson(stringPoint)
 		trackings = append(trackings, tracking)
 	}
@@ -57,7 +70,7 @@ func (r *EscortTrackingRepository) GetByTerritory(ctx context.Context, territory
 	return trackings, nil
 }
 
-func (r *EscortTrackingRepository) UpsertOne(ctx context.Context, tracking *models.EscortTracking) error {
+func (r *EscortTrackingRepository) UpsertEscortTracking(ctx context.Context, tracking *models.EscortTracking) error {
 	query := "SELECT id FROM escort_tracking WHERE escort_id = $1;"
 	row := r.Data.DB.QueryRowContext(ctx, query, tracking.EscortId)
 
@@ -92,7 +105,7 @@ func (r *EscortTrackingRepository) UpsertOne(ctx context.Context, tracking *mode
 	return nil
 }
 
-func (r *EscortTrackingRepository) Count(ctx context.Context) (int, error) {
+func (r *EscortTrackingRepository) CountEscortLocationByTerritory(ctx context.Context) (int, error) {
 	query := `SELECT COUNT(a.*) from escort_tracking AS a
 			  JOIN territory AS b
 		      ON st_intersects(a.location, b.location)

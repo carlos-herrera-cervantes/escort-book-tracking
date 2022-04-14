@@ -11,7 +11,7 @@ import (
 func BoostrapCustomerTrackingRoutes(v *echo.Group) {
 	router := &controllers.CustomerTrackingController{
 		Repository: &repositories.CustomerTrackingRepository{
-			Data: db.New(),
+			Data: db.InitDB("default"),
 		},
 	}
 

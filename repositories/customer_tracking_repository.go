@@ -8,11 +8,16 @@ import (
 	"time"
 )
 
+type ICustomerTrackingRepository interface {
+	GetCustomerTracking(ctx context.Context, id string) (*models.CustomerTracking, error)
+	UpsertCustomerTracking(ctx context.Context, tracking *models.CustomerTracking) error
+}
+
 type CustomerTrackingRepository struct {
 	Data *db.Data
 }
 
-func (r *CustomerTrackingRepository) GetOne(ctx context.Context, id string) (models.CustomerTracking, error) {
+func (r *CustomerTrackingRepository) GetCustomerTracking(ctx context.Context, id string) (*models.CustomerTracking, error) {
 	query := `SELECT id, customer_id, st_asgeojson(location), created_at, updated_at
 			  FROM customer_tracking WHERE customer_id = $1;`
 	row := r.Data.DB.QueryRowContext(ctx, query, id)
@@ -27,15 +32,15 @@ func (r *CustomerTrackingRepository) GetOne(ctx context.Context, id string) (mod
 		&tracking.UpdatedAt)
 
 	if err != nil {
-		return models.CustomerTracking{}, err
+		return &models.CustomerTracking{}, err
 	}
 
 	tracking.Location.ParseGeoJson(stringPoint)
 
-	return tracking, nil
+	return &tracking, nil
 }
 
-func (r *CustomerTrackingRepository) UpsertOne(ctx context.Context, tracking *models.CustomerTracking) error {
+func (r *CustomerTrackingRepository) UpsertCustomerTracking(ctx context.Context, tracking *models.CustomerTracking) error {
 	query := "SELECT id FROM customer_tracking WHERE customer_id = $1;"
 	row := r.Data.DB.QueryRowContext(ctx, query, tracking.CustomerId)
 

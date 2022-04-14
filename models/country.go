@@ -13,7 +13,4 @@ type Country struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-func (c *Country) SetDefaultValues() *Country {
-	c.Id = uuid.NewString()
-	return c
-}
+func (c *Country) SetDefaultValues() { c.Id = uuid.NewString() }
