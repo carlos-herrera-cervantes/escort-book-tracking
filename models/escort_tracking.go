@@ -8,14 +8,15 @@ import (
 )
 
 type EscortTracking struct {
-	Id        string         `json:"id"`
-	EscortId  string         `json:"escortId"`
-	Location  types.Location `json:"location"`
-	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`
+	Id                   string         `json:"id"`
+	EscortId             string         `json:"escortId"`
+	Location             types.Location `json:"location"`
+	EscortTrackingStatus string         `json:"escortTrackingStatus"`
+	FirstName            string         `json:"firstName"`
+	LastName             string         `json:"lastName"`
+	Avatar               string         `json:"avatar"`
+	CreatedAt            time.Time      `json:"createdAt"`
+	UpdatedAt            time.Time      `json:"updatedAt"`
 }
 
-func (e *EscortTracking) SetDefaultValues() *EscortTracking {
-	e.Id = uuid.NewString()
-	return e
-}
+func (e *EscortTracking) SetDefaultValues() { e.Id = uuid.NewString() }

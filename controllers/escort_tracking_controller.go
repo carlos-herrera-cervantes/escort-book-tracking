@@ -4,13 +4,16 @@ import (
 	"escort-book-tracking/models"
 	"escort-book-tracking/repositories"
 	"escort-book-tracking/types"
+	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/labstack/echo/v4"
 )
 
 type EscortTrackingController struct {
-	Repository *repositories.EscortTrackingRepository
+	Repository              *repositories.EscortTrackingRepository
+	EscortProfileRepository *repositories.EscortProfileRepository
 }
 
 func (h *EscortTrackingController) GetLocationsByTerritory(c echo.Context) (err error) {
@@ -23,16 +26,23 @@ func (h *EscortTrackingController) GetLocationsByTerritory(c echo.Context) (err 
 	}
 
 	territory := c.QueryParam("territory")
-	trackings, _ := h.Repository.GetByTerritory(c.Request().Context(), territory, pager.Offset, pager.Limit)
-	number, _ := h.Repository.Count(c.Request().Context())
+	trackings, _ := h.Repository.GetEscortLocationByTerritory(c.Request().Context(), territory, pager.Offset, pager.Limit)
+
+	for index, value := range trackings {
+		profile, _ := h.EscortProfileRepository.GetEscortProfile(c.Request().Context(), value.EscortId)
+		trackings[index].FirstName = profile.FirstName
+		trackings[index].LastName = profile.LastName
+		trackings[index].Avatar = fmt.Sprintf("%s/%s/%s", os.Getenv("ENDPOINT"), os.Getenv("S3"), profile.Avatar)
+	}
+
+	number, _ := h.Repository.CountEscortLocationByTerritory(c.Request().Context())
 	pagerResult := types.PagerResult{}
 
 	return c.JSON(http.StatusOK, pagerResult.GetPagerResult(&pager, number, trackings))
 }
 
 func (h *EscortTrackingController) GetEscortLocation(c echo.Context) error {
-	escortId := ""
-	tracking, err := h.Repository.GetOne(c.Request().Context(), escortId)
+	tracking, err := h.Repository.GetEscortTracking(c.Request().Context(), c.Request().Header.Get("user-id"))
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -43,14 +53,13 @@ func (h *EscortTrackingController) GetEscortLocation(c echo.Context) error {
 
 func (h *EscortTrackingController) SetEscortLocation(c echo.Context) (err error) {
 	var escortTracking models.EscortTracking
-	escortId := ""
-	escortTracking.EscortId = escortId
+	escortTracking.EscortId = c.Request().Header.Get("user-id")
 
 	if err = c.Bind(&escortTracking.Location); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	if err = h.Repository.UpsertOne(c.Request().Context(), &escortTracking); err != nil {
+	if err = h.Repository.UpsertEscortTracking(c.Request().Context(), &escortTracking); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

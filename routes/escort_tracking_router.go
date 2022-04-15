@@ -11,7 +11,10 @@ import (
 func BoostrapEscortTrackingRoutes(v *echo.Group) {
 	router := &controllers.EscortTrackingController{
 		Repository: &repositories.EscortTrackingRepository{
-			Data: db.New(),
+			Data: db.InitDB("default"),
+		},
+		EscortProfileRepository: &repositories.EscortProfileRepository{
+			Data: db.InitDB("escortProfile"),
 		},
 	}
 

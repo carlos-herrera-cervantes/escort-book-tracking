@@ -3,32 +3,27 @@ package db
 import (
 	"database/sql"
 	"log"
-	"sync"
 )
 
 var (
 	data *Data
-	once sync.Once
 )
 
 type Data struct {
 	DB *sql.DB
 }
 
-func initDB() {
-	db, err := getConnection()
+func InitDB(db string) *Data {
+	dbs, err := getConnection()
 
 	if err != nil {
 		log.Panic(err)
 	}
 
 	data = &Data{
-		DB: db,
+		DB: dbs[db],
 	}
-}
 
-func New() *Data {
-	once.Do(initDB)
 	return data
 }
 

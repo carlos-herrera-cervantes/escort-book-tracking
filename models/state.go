@@ -14,7 +14,4 @@ type State struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-func (s *State) SetDefaultValues() *State {
-	s.Id = uuid.NewString()
-	return s
-}
+func (s *State) SetDefaultValues() { s.Id = uuid.NewString() }

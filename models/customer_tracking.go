@@ -15,7 +15,4 @@ type CustomerTracking struct {
 	UpdatedAt  time.Time      `json:"updatedAt"`
 }
 
-func (c *CustomerTracking) SetDefaultValues() *CustomerTracking {
-	c.Id = uuid.NewString()
-	return c
-}
+func (c *CustomerTracking) SetDefaultValues() { c.Id = uuid.NewString() }
