@@ -11,6 +11,7 @@ import (
 type ICustomerTrackingRepository interface {
 	GetCustomerTracking(ctx context.Context, id string) (*models.CustomerTracking, error)
 	UpsertCustomerTracking(ctx context.Context, tracking *models.CustomerTracking) error
+	Acknowledge(ctx context.Context, customerId string) error
 }
 
 type CustomerTrackingRepository struct {
@@ -18,7 +19,7 @@ type CustomerTrackingRepository struct {
 }
 
 func (r *CustomerTrackingRepository) GetCustomerTracking(ctx context.Context, id string) (*models.CustomerTracking, error) {
-	query := `SELECT id, customer_id, st_asgeojson(location), created_at, updated_at
+	query := `SELECT id, customer_id, st_asgeojson(location), created_at, updated_at, acknowledged
 			  FROM customer_tracking WHERE customer_id = $1;`
 	row := r.Data.DB.QueryRowContext(ctx, query, id)
 
@@ -29,7 +30,9 @@ func (r *CustomerTrackingRepository) GetCustomerTracking(ctx context.Context, id
 		&tracking.CustomerId,
 		&stringPoint,
 		&tracking.CreatedAt,
-		&tracking.UpdatedAt)
+		&tracking.UpdatedAt,
+		&tracking.Acknowledged,
+	)
 
 	if err != nil {
 		return &models.CustomerTracking{}, err
@@ -71,6 +74,16 @@ func (r *CustomerTrackingRepository) UpsertCustomerTracking(ctx context.Context,
 		point,
 		time.Now().UTC(),
 		time.Now().UTC())
+
+	return nil
+}
+
+func (r *CustomerTrackingRepository) Acknowledge(ctx context.Context, customerId string) error {
+	query := "UPDATE customer_tracking SET acknowledged = TRUE WHERE customer_id = $1;"
+
+	if _, err := r.Data.DB.ExecContext(ctx, query, customerId); err != nil {
+		return err
+	}
 
 	return nil
 }

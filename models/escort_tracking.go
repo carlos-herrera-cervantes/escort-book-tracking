@@ -15,6 +15,7 @@ type EscortTracking struct {
 	FirstName            string         `json:"firstName"`
 	LastName             string         `json:"lastName"`
 	Avatar               string         `json:"avatar"`
+	Acknowledged         bool           `json:"-"`
 	CreatedAt            time.Time      `json:"createdAt"`
 	UpdatedAt            time.Time      `json:"updatedAt"`
 }

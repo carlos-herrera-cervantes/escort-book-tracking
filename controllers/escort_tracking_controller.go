@@ -1,19 +1,27 @@
 package controllers
 
 import (
-	"escort-book-tracking/models"
-	"escort-book-tracking/repositories"
-	"escort-book-tracking/types"
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
+
+	"escort-book-tracking/config"
+	"escort-book-tracking/models"
+	"escort-book-tracking/repositories"
+	"escort-book-tracking/services"
+	"escort-book-tracking/types"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type EscortTrackingController struct {
-	Repository              *repositories.EscortTrackingRepository
-	EscortProfileRepository *repositories.EscortProfileRepository
+	Repository              repositories.IEscortTrackingRepository
+	EscortProfileRepository repositories.IEscortProfileRepository
+	KafkaService            services.IKafkaService
 }
 
 func (h *EscortTrackingController) GetLocationsByTerritory(c echo.Context) (err error) {
@@ -63,5 +71,44 @@ func (h *EscortTrackingController) SetEscortLocation(c echo.Context) (err error)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go h.emitAcknowledge(c.Request().Context(), c.Request().Header.Get("user-id"), &wg)
+
+	wg.Wait()
+
 	return c.JSON(http.StatusCreated, escortTracking)
+}
+
+func (h *EscortTrackingController) emitAcknowledge(ctx context.Context, userId string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	tracking, err := h.Repository.GetEscortTracking(ctx, userId)
+
+	if err != nil {
+		log.Errorf("escort_controller->emitAcknowledge->GetEscortTracking:%s", err.Error())
+		return
+	}
+
+	if tracking.Acknowledged {
+		log.Infof("escort_controller->emitAcknowledge->The escort %s already acknowledged", userId)
+		return
+	}
+
+	if err := h.Repository.Acknowledge(ctx, userId); err != nil {
+		log.Errorf("escort_controller->emitAcknowledge->Acknowledge:%s", err.Error())
+		return
+	}
+
+	countUserEvent := types.CountUserEvent{
+		Accumulator: 1,
+		Operation:   config.NewUser,
+		UserId:      userId,
+		UserType:    "Escort",
+	}
+	bytes, _ := json.Marshal(countUserEvent)
+
+	if err := h.KafkaService.SendMessage(ctx, config.OperationTopic, bytes); err != nil {
+		log.Errorf("escort_controller->emitAcknowledge->SendMessage:%s", err.Error())
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"escort-book-tracking/controllers"
 	"escort-book-tracking/db"
 	"escort-book-tracking/repositories"
+	"escort-book-tracking/services"
 
 	"github.com/labstack/echo/v4"
 )
@@ -15,6 +16,9 @@ func BoostrapEscortTrackingRoutes(v *echo.Group) {
 		},
 		EscortProfileRepository: &repositories.EscortProfileRepository{
 			Data: db.InitDB("escortProfile"),
+		},
+		KafkaService: &services.KafkaService{
+			Producer: db.NewProducer(),
 		},
 	}
 

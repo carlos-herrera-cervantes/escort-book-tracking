@@ -1,15 +1,24 @@
 package controllers
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"sync"
+
+	"escort-book-tracking/config"
 	"escort-book-tracking/models"
 	"escort-book-tracking/repositories"
-	"net/http"
+	"escort-book-tracking/services"
+	"escort-book-tracking/types"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 )
 
 type CustomerTrackingController struct {
-	Repository *repositories.CustomerTrackingRepository
+	Repository   repositories.ICustomerTrackingRepository
+	KafkaService services.IKafkaService
 }
 
 func (h *CustomerTrackingController) GetCustomerLocation(c echo.Context) error {
@@ -34,5 +43,44 @@ func (h *CustomerTrackingController) SetCustomerLocation(c echo.Context) (err er
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go h.emitAcknowledge(c.Request().Context(), c.Request().Header.Get("user-id"), &wg)
+
+	wg.Wait()
+
 	return c.JSON(http.StatusCreated, customerTracking)
+}
+
+func (h *CustomerTrackingController) emitAcknowledge(ctx context.Context, userId string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	tracking, err := h.Repository.GetCustomerTracking(ctx, userId)
+
+	if err != nil {
+		log.Errorf("customer_controller->emitAcknowledge->GetCustomerTracking:%s", err.Error())
+		return
+	}
+
+	if tracking.Acknowledged {
+		log.Infof("customer_controller->emitAcknowledge->The customer %s already acknowledged", userId)
+		return
+	}
+
+	if err := h.Repository.Acknowledge(ctx, userId); err != nil {
+		log.Errorf("customer_controller->emitAcknowledge->Acknowledge:%s", err.Error())
+		return
+	}
+
+	countUserEvent := types.CountUserEvent{
+		Accumulator: 1,
+		Operation:   config.NewUser,
+		UserId:      userId,
+		UserType:    "Customer",
+	}
+	bytes, _ := json.Marshal(countUserEvent)
+
+	if err := h.KafkaService.SendMessage(ctx, config.OperationTopic, bytes); err != nil {
+		log.Errorf("customer_controller->emitAcknowledge->SendMessage:%s", err.Error())
+	}
 }

@@ -13,6 +13,7 @@ type IEscortTrackingRepository interface {
 	GetEscortLocationByTerritory(ctx context.Context, territory string, offset, limit int) ([]models.EscortTracking, error)
 	UpsertEscortTracking(ctx context.Context, tracking *models.EscortTracking) error
 	CountEscortLocationByTerritory(ctx context.Context) (int, error)
+	Acknowledge(ctx context.Context, escortId string) error
 }
 
 type EscortTrackingRepository struct {
@@ -20,7 +21,7 @@ type EscortTrackingRepository struct {
 }
 
 func (r *EscortTrackingRepository) GetEscortTracking(ctx context.Context, id string) (*models.EscortTracking, error) {
-	query := `SELECT a.id, a.escort_id, st_asgeojson(a.location), a.created_at, a.updated_at, b.name
+	query := `SELECT a.id, a.escort_id, st_asgeojson(a.location), a.created_at, a.updated_at, b.name, a.acknowledged
 		      FROM escort_tracking AS a
 			  JOIN escort_tracking_status AS b
 			  WHERE escort_id = $1;`
@@ -35,6 +36,7 @@ func (r *EscortTrackingRepository) GetEscortTracking(ctx context.Context, id str
 		&tracking.CreatedAt,
 		&tracking.UpdatedAt,
 		&tracking.EscortTrackingStatus,
+		&tracking.Acknowledged,
 	)
 
 	if err != nil {
@@ -55,8 +57,12 @@ func (r *EscortTrackingRepository) GetEscortLocationByTerritory(ctx context.Cont
 			  ON a.escort_tracking_status_id = c.id
 		      WHERE b.name = $1 AND c.name IN('Free', 'Busy') OFFSET($2) LIMIT($3);`
 
-	rows, _ := r.Data.DB.QueryContext(ctx, query, territory, offset, limit)
+	rows, err := r.Data.DB.QueryContext(ctx, query, territory, offset, limit)
 	var trackings []models.EscortTracking
+
+	if err != nil {
+		return trackings, nil
+	}
 
 	for rows.Next() {
 		var tracking models.EscortTracking
@@ -118,4 +124,14 @@ func (r *EscortTrackingRepository) CountEscortLocationByTerritory(ctx context.Co
 	row.Scan(&number)
 
 	return number, nil
+}
+
+func (r *EscortTrackingRepository) Acknowledge(ctx context.Context, escortId string) error {
+	query := "UPDATE escort_tracking SET acknowledged = TRUE WHERE escort_id = $1;"
+
+	if _, err := r.Data.DB.ExecContext(ctx, query, escortId); err != nil {
+		return err
+	}
+
+	return nil
 }
