@@ -1,18 +1,15 @@
 package services
 
 import (
-	"context"
-	"escort-book-tracking/db"
-
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+    "github.com/confluentinc/confluent-kafka-go/kafka"
 )
 
 type KafkaService struct {
-	Producer *db.Producer
+	Producer IKafka
 }
 
-func (k *KafkaService) SendMessage(ctx context.Context, topic string, message []byte) error {
-	if err := k.Producer.KafkaProducer.Produce(&kafka.Message{
+func (k *KafkaService) SendMessage(topic string, message []byte) error {
+	if err := k.Producer.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{
 			Topic:     &topic,
 			Partition: kafka.PartitionAny,

@@ -1,8 +1,9 @@
 package models
 
 import (
-	"escort-book-tracking/types"
 	"time"
+
+    "escort-book-tracking/types"
 
 	"github.com/google/uuid"
 )

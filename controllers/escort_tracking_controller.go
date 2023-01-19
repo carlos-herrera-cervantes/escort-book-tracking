@@ -1,21 +1,20 @@
 package controllers
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
-	"sync"
+    "context"
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "sync"
 
-	"escort-book-tracking/config"
-	"escort-book-tracking/models"
-	"escort-book-tracking/repositories"
-	"escort-book-tracking/services"
-	"escort-book-tracking/types"
+    "escort-book-tracking/config"
+    "escort-book-tracking/models"
+    "escort-book-tracking/repositories"
+    "escort-book-tracking/services"
+    "escort-book-tracking/types"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
+    "github.com/labstack/echo/v4"
+    "github.com/labstack/gommon/log"
 )
 
 type EscortTrackingController struct {
@@ -25,32 +24,55 @@ type EscortTrackingController struct {
 }
 
 func (h *EscortTrackingController) GetLocationsByTerritory(c echo.Context) (err error) {
-	var pager types.Pager
+	pager := types.Pager{}
 
-	c.Bind(&pager)
+	if err := c.Bind(&pager); err != nil {
+        return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+    }
 
 	if err = pager.Validate(); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	territory := c.QueryParam("territory")
-	trackings, _ := h.Repository.GetEscortLocationByTerritory(c.Request().Context(), territory, pager.Offset, pager.Limit)
+	ctx := c.Request().Context()
+	tracking, err := h.Repository.GetEscortLocationByTerritory(ctx, territory, pager.Offset, pager.Limit)
 
-	for index, value := range trackings {
-		profile, _ := h.EscortProfileRepository.GetEscortProfile(c.Request().Context(), value.EscortId)
-		trackings[index].FirstName = profile.FirstName
-		trackings[index].LastName = profile.LastName
-		trackings[index].Avatar = fmt.Sprintf("%s/%s/%s", os.Getenv("ENDPOINT"), os.Getenv("S3"), profile.Avatar)
+	if err != nil {
+	    return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+    }
+
+	for index, value := range tracking {
+		profile, err := h.EscortProfileRepository.GetEscortProfile(ctx, value.EscortId)
+
+		if err != nil {
+		    continue
+        }
+
+		tracking[index].FirstName = profile.FirstName
+		tracking[index].LastName = profile.LastName
+		tracking[index].Avatar = fmt.Sprintf(
+		    "%s/%s/%s",
+		    config.InitS3().Endpoint,
+		    config.InitS3().Buckets.Profile,
+		    profile.Avatar,
+		)
 	}
 
-	number, _ := h.Repository.CountEscortLocationByTerritory(c.Request().Context())
-	pagerResult := types.PagerResult{}
+	totalRows, _ := h.Repository.CountEscortLocationByTerritory(ctx)
+	pagerResult := types.PagerResult{
+	    Total: totalRows,
+	    Data: tracking,
+    }
 
-	return c.JSON(http.StatusOK, pagerResult.GetPagerResult(&pager, number, trackings))
+	return c.JSON(http.StatusOK, pagerResult.GetPagerResult(pager))
 }
 
 func (h *EscortTrackingController) GetEscortLocation(c echo.Context) error {
-	tracking, err := h.Repository.GetEscortTracking(c.Request().Context(), c.Request().Header.Get("user-id"))
+	tracking, err := h.Repository.GetEscortTracking(
+	    c.Request().Context(),
+	    c.Request().Header.Get("user-id"),
+	)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -60,21 +82,24 @@ func (h *EscortTrackingController) GetEscortLocation(c echo.Context) error {
 }
 
 func (h *EscortTrackingController) SetEscortLocation(c echo.Context) (err error) {
-	var escortTracking models.EscortTracking
-	escortTracking.EscortId = c.Request().Header.Get("user-id")
+	escortTracking := models.EscortTracking{}
+	userId := c.Request().Header.Get("user-id")
+	escortTracking.EscortId = userId
 
 	if err = c.Bind(&escortTracking.Location); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	if err = h.Repository.UpsertEscortTracking(c.Request().Context(), &escortTracking); err != nil {
+	ctx := c.Request().Context()
+
+	if err = h.Repository.AlterEscortTracking(ctx, &escortTracking); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	go h.emitAcknowledge(c.Request().Context(), c.Request().Header.Get("user-id"), &wg)
+	go h.emitAcknowledge(ctx, userId, &wg)
 
 	wg.Wait()
 
@@ -102,13 +127,13 @@ func (h *EscortTrackingController) emitAcknowledge(ctx context.Context, userId s
 
 	countUserEvent := types.CountUserEvent{
 		Accumulator: 1,
-		Operation:   config.NewUser,
+		Operation:   config.InitOperationConfig().NewUser,
 		UserId:      userId,
 		UserType:    "Escort",
 	}
 	bytes, _ := json.Marshal(countUserEvent)
 
-	if err := h.KafkaService.SendMessage(ctx, config.OperationTopic, bytes); err != nil {
+	if err := h.KafkaService.SendMessage(config.InitKafkaConfig().Topics.OperationTopic, bytes); err != nil {
 		log.Errorf("escort_controller->emitAcknowledge->SendMessage:%s", err.Error())
 	}
 }
