@@ -2,10 +2,11 @@ package repositories
 
 import (
 	"context"
-	"escort-book-tracking/db"
-	"escort-book-tracking/models"
 	"regexp"
 	"testing"
+
+    "escort-book-tracking/db"
+    "escort-book-tracking/models"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -13,16 +14,15 @@ import (
 
 func TestGetTerritoryByName(t *testing.T) {
 	database, mock, _ := sqlmock.New()
-	data := &db.Data{
-		DB: database,
+	data := &db.PostgresClient{
+		EscortTrackingDB: database,
 	}
-
 	repository := &TerritoryRepository{
 		Data: data,
 	}
 
 	rows := sqlmock.
-		NewRows([]string{"id", "name"}).
+        NewRows([]string{"id", "name"}).
 		AddRow("dummy-uuid", "dummy-territory")
 
 	query := "SELECT id, name FROM territory WHERE name = $1;"

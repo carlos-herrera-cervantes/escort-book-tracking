@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+
 	"escort-book-tracking/db"
 	"escort-book-tracking/models"
 )
@@ -11,19 +12,18 @@ type ITerritoryRepository interface {
 }
 
 type TerritoryRepository struct {
-	Data *db.Data
+	Data *db.PostgresClient
 }
 
 func (r *TerritoryRepository) GetTerritoryByName(ctx context.Context, name string) (*models.Territory, error) {
 	query := "SELECT id, name FROM territory WHERE name = $1;"
-	row := r.Data.DB.QueryRowContext(ctx, query, name)
+	row := r.Data.EscortTrackingDB.QueryRowContext(ctx, query, name)
 
 	var territory models.Territory
-	err := row.Scan(&territory.Id, &territory.Name)
 
-	if err != nil {
-		return &models.Territory{}, err
-	}
+	if err := row.Scan(&territory.Id, &territory.Name); err != nil {
+	    return &territory, err
+    }
 
 	return &territory, nil
 }

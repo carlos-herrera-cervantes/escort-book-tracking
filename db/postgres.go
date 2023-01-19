@@ -1,21 +1,58 @@
 package db
 
 import (
-	"database/sql"
-	"os"
+    "database/sql"
+    "fmt"
+    "log"
+    "sync"
 
-	_ "github.com/lib/pq"
+    "escort-book-tracking/config"
+
+    _ "github.com/lib/pq"
 )
 
-func getConnection() (map[string]*sql.DB, error) {
-	defaultDBUri := os.Getenv("DEFAULT_DB")
-	defaultDB, _ := sql.Open("postgres", defaultDBUri)
+type PostgresClient struct {
+    EscortTrackingDB *sql.DB
+    EscortProfileDB *sql.DB
+}
 
-	escortProfileDBUri := os.Getenv("ESCORT_PROFILE_DB")
-	escortProfileDB, _ := sql.Open("postgres", escortProfileDBUri)
+var singletonPostgresClient *PostgresClient
+var lock = &sync.Mutex{}
 
-	return map[string]*sql.DB{
-		"default":       defaultDB,
-		"escortProfile": escortProfileDB,
-	}, nil
+func NewPostgresClient() *PostgresClient {
+    if singletonPostgresClient != nil {
+        return singletonPostgresClient
+    }
+
+    lock.Lock()
+    defer lock.Unlock()
+
+    escortTrackingDBURI := fmt.Sprintf(
+        "%s/%s?sslmode=disable",
+        config.InitPostgresConfig().Host,
+        config.InitPostgresConfig().Databases.EscortTracking,
+    )
+    escortTrackingDB, err := sql.Open("postgres", escortTrackingDBURI)
+
+    if err != nil {
+        log.Panic(err.Error())
+    }
+
+    escortProfileDBURI := fmt.Sprintf(
+        "%s/%s?sslmode=disable",
+        config.InitPostgresConfig().Host,
+        config.InitPostgresConfig().Databases.EscortProfile,
+    )
+    escortProfileDB, err := sql.Open("postgres", escortProfileDBURI)
+
+    if err != nil {
+        log.Panic(err.Error())
+    }
+
+    singletonPostgresClient = &PostgresClient{
+        EscortProfileDB: escortProfileDB,
+        EscortTrackingDB: escortTrackingDB,
+    }
+
+    return singletonPostgresClient
 }

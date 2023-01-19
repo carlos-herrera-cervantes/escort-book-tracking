@@ -9,10 +9,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func BoostrapCustomerTrackingRoutes(v *echo.Group) {
+func BootstrapCustomerTrackingRoutes(v *echo.Group) {
 	router := &controllers.CustomerTrackingController{
 		Repository: &repositories.CustomerTrackingRepository{
-			Data: db.InitDB("default"),
+			Data: db.NewPostgresClient(),
 		},
 		KafkaService: &services.KafkaService{
 			Producer: db.NewProducer(),

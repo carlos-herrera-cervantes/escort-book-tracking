@@ -11,7 +11,11 @@ type Location struct {
 
 func (l *Location) ParseGeoJson(geoJson string) {
 	var point map[string]interface{}
-	json.Unmarshal([]byte(geoJson), &point)
+
+	if err := json.Unmarshal([]byte(geoJson), &point); err != nil {
+	    return
+    }
+
 	coordinates := point["coordinates"].([]interface{})
 
 	l.Latitude = coordinates[0].(float64)

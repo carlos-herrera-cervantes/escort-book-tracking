@@ -1,19 +1,19 @@
 package controllers
 
 import (
-	"context"
-	"encoding/json"
-	"net/http"
-	"sync"
+    "context"
+    "encoding/json"
+    "net/http"
+    "sync"
 
-	"escort-book-tracking/config"
-	"escort-book-tracking/models"
-	"escort-book-tracking/repositories"
-	"escort-book-tracking/services"
-	"escort-book-tracking/types"
+    "escort-book-tracking/config"
+    "escort-book-tracking/models"
+    "escort-book-tracking/repositories"
+    "escort-book-tracking/services"
+    "escort-book-tracking/types"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
+    "github.com/labstack/echo/v4"
+    "github.com/labstack/gommon/log"
 )
 
 type CustomerTrackingController struct {
@@ -22,7 +22,10 @@ type CustomerTrackingController struct {
 }
 
 func (h *CustomerTrackingController) GetCustomerLocation(c echo.Context) error {
-	tracking, err := h.Repository.GetCustomerTracking(c.Request().Context(), c.Request().Header.Get("user-id"))
+	tracking, err := h.Repository.GetCustomerTracking(
+	    c.Request().Context(),
+	    c.Request().Header.Get("user-id"),
+	)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -33,20 +36,23 @@ func (h *CustomerTrackingController) GetCustomerLocation(c echo.Context) error {
 
 func (h *CustomerTrackingController) SetCustomerLocation(c echo.Context) (err error) {
 	var customerTracking models.CustomerTracking
-	customerTracking.CustomerId = c.Request().Header.Get("user-id")
 
 	if err = c.Bind(&customerTracking.Location); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	if err = h.Repository.UpsertCustomerTracking(c.Request().Context(), &customerTracking); err != nil {
+	userId := c.Request().Header.Get("user-id")
+    customerTracking.CustomerId = userId
+	ctx := c.Request().Context()
+
+	if err = h.Repository.AlterCustomerTracking(ctx, &customerTracking); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	go h.emitAcknowledge(c.Request().Context(), c.Request().Header.Get("user-id"), &wg)
+	go h.emitAcknowledge(ctx, userId, &wg)
 
 	wg.Wait()
 
@@ -74,13 +80,13 @@ func (h *CustomerTrackingController) emitAcknowledge(ctx context.Context, userId
 
 	countUserEvent := types.CountUserEvent{
 		Accumulator: 1,
-		Operation:   config.NewUser,
+		Operation:   config.InitOperationConfig().NewUser,
 		UserId:      userId,
 		UserType:    "Customer",
 	}
 	bytes, _ := json.Marshal(countUserEvent)
 
-	if err := h.KafkaService.SendMessage(ctx, config.OperationTopic, bytes); err != nil {
+	if err := h.KafkaService.SendMessage(config.InitKafkaConfig().Topics.OperationTopic, bytes); err != nil {
 		log.Errorf("customer_controller->emitAcknowledge->SendMessage:%s", err.Error())
 	}
 }

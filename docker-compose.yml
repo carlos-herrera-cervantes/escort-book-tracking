@@ -1,0 +1,13 @@
+version: '3'
+services:
+    test:
+        build:
+            context: .
+            dockerfile: dockerfile.test
+        volumes:
+            - data:/app
+        working_dir: /app
+        user: ${MY_USER:-root}
+        command: 'bash ./test.sh'
+volumes:
+    data:

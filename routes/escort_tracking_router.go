@@ -9,13 +9,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func BoostrapEscortTrackingRoutes(v *echo.Group) {
+func BootstrapEscortTrackingRoutes(v *echo.Group) {
 	router := &controllers.EscortTrackingController{
 		Repository: &repositories.EscortTrackingRepository{
-			Data: db.InitDB("default"),
+			Data: db.NewPostgresClient(),
 		},
 		EscortProfileRepository: &repositories.EscortProfileRepository{
-			Data: db.InitDB("escortProfile"),
+			Data: db.NewPostgresClient(),
 		},
 		KafkaService: &services.KafkaService{
 			Producer: db.NewProducer(),

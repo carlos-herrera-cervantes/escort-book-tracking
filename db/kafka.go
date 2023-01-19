@@ -1,39 +1,33 @@
 package db
 
 import (
-	"log"
-	"os"
-	"sync"
+    "log"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+    "escort-book-tracking/config"
+
+    "github.com/confluentinc/confluent-kafka-go/kafka"
 )
 
-var (
-	producer *Producer
-	once     sync.Once
-)
+var singletonProducer *kafka.Producer
 
-type Producer struct {
-	KafkaProducer *kafka.Producer
-}
+func NewProducer() *kafka.Producer {
+    if singletonProducer != nil {
+        return singletonProducer
+    }
 
-func initProducer() {
+    lock.Lock()
+    defer lock.Unlock()
+
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": os.Getenv("KAFKA_SERVERS"),
-		"client.id":         os.Getenv("KAFKA_CLIENT_ID"),
-		"acks":              "all",
+		"bootstrap.servers": config.InitKafkaConfig().BootstrapServers,
+		"client.id":         config.InitKafkaConfig().GroupId,
 	})
 
 	if err != nil {
 		log.Panic("ERROR CREATING A PRODUCER: ", err)
 	}
 
-	producer = &Producer{
-		KafkaProducer: p,
-	}
-}
+    singletonProducer = p
 
-func NewProducer() *Producer {
-	once.Do(initProducer)
-	return producer
+	return singletonProducer
 }
